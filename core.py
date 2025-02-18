@@ -51,15 +51,13 @@ def download_image(file, id, name, token, out=None, frame=None):
 def parse_file(file, token, download_images=True, out=None):
     output = []
     result = get_file(file, token)
-    
+
     if isinstance(result, tuple):
         return []
-    
+
     try:
         frames = result['document']['children'][0]['children']
         frame_count = 1 if len(frames) > 1 else 0
-        # import json
-        # print(json.dumps(frames, indent=4, sort_keys=True))
 
         def parse_frame(frame, frame_count):
             nonlocal output
@@ -73,26 +71,27 @@ def parse_file(file, token, download_images=True, out=None):
                     bounds = i['absoluteBoundingBox']
                 else:
                     bounds = i['absoluteRenderBounds']
-                
-                items = ["image", "button", "label", "scale", "listbox", "textbox", "textarea", "rectangle", "spinbox", "circle", "oval", "line"]
+
+                items = ["image", "button", "label", "scale", "listbox", "textbox", "textarea", "rectangle", "spinbox",
+                         "circle", "oval", "line"]
                 type = i['name'].split(' ', 1)[0].lower()
                 type = type if type in items else "text"
-                
+
                 i['type'] = type
                 i['x'] = abs(int(frame['absoluteBoundingBox']['x']) - int(bounds['x']))
                 i['y'] = abs(int(frame['absoluteBoundingBox']['y']) - int(bounds['y']))
                 i['width'] = int(bounds['width'])
                 i['height'] = int(bounds['height'])
                 i['background'] = None
-                
+
                 bg_color = i.get('backgroundColor') or \
-                        (i.get('background', [{}])[0].get('color') if i.get('background') else None) or \
-                        (i.get('fills', [{}])[0].get('color') if i.get('fills') else "#000000")
-                
+                           (i.get('background', [{}])[0].get('color') if i.get('background') else None) or \
+                           (i.get('fills', [{}])[0].get('color') if i.get('fills') else "#000000")
+
                 if bg_color and bg_color != "#000000":
                     i['background'] = rgb_to_hex(bg_color['r'], bg_color['g'], bg_color['b'])
                     fg = get_foreground_color(bg_color['r'], bg_color['g'], bg_color['b'])
-                    
+
                     if fg == i['background']:
                         i['foreground'] = '#ffffff' if fg == '#000000' else '#000000' if fg == '#ffffff' else fg
                     else:
@@ -103,12 +102,17 @@ def parse_file(file, token, download_images=True, out=None):
 
                 def download(name):
                     nonlocal i
-                    image = download_image(file, i['id'], name, token, out, frame_count) if frame_count > 0 else download_image(file, i['id'], name, token, out)
-                    
+                    image = download_image(file, i['id'], name, token, out,
+                                           frame_count) if frame_count > 0 else download_image(file, i['id'], name,
+                                                                                               token, out)
+
                     if image:
                         i['image'] = image
                     else:
                         i['image'] = None
+
+                # Initialize full_name with a fallback value
+                full_name = "Unnamed"
 
                 if (i.get('strokes') and not i.get('strokes') == []):
                     stroke_color = i.get('strokes', [{}])[0].get('color')
@@ -119,50 +123,60 @@ def parse_file(file, token, download_images=True, out=None):
                     style = i.get('style', {})
                     i['font'] = style.get('fontFamily', 'Default Font')
                     i['font_size'] = int(style.get('fontSize', 12))
-                
+
                 elif type == 'image':
                     parts = i['name'].split(' ')
                     name = " ".join(parts[1:])
                     if not name.replace(' ', '') == '':
+                        full_name = name  # Use specific name for images
                         download(name)
                     else:
                         image_count += 1
+                        full_name = str(image_count)
                         download(str(image_count))
-                    
+
                 elif type == 'scale':
                     scale = i['name'].split(' ')
                     i['from'] = int(scale[1])
                     i['to'] = int(scale[2])
                     i['orient'] = scale[3] if len(scale) > 3 else "HORIZONTAL"
-                
+
                 elif type in ['textbox', 'textarea']:
                     parts = i['name'].split(' ')
                     placeholder = " ".join(parts[1:])
 
                     if not placeholder.replace(' ', '') == '':
                         i['placeholder'] = placeholder
-                
+
                         if type == 'textbox':
                             entry_placeholder = True
-                
+
                         elif type == 'textarea':
                             text_placeholder = True
-                
-                elif type == 'button' and download_images:
+
+
+                elif type == 'button':
+                    full_name = i['name']  # Keeps "Button Settings" or any other name as specified in Figma.
+
+                # Safeguard: Ensure full_name is valid before attempting any download
+                if download_images and full_name:
                     image_count += 1
-                    download(image_count)
-                
+                    download(full_name)  # Use the full button name or default fallback while downloading images.
+
+                # Attach the full name to the parsed item for use in the generated code.
+                i['full_name'] = full_name
+
                 parsed.append(i)
-            
+
             frame_bg = frame.get('backgroundColor') or \
-                            (frame.get('background', [{}])[0].get('color') if frame.get('background') else None) or \
-                            (frame.get('fills', [{}])[0].get('color') if frame.get('fills') else None)
+                       (frame.get('background', [{}])[0].get('color') if frame.get('background') else None) or \
+                       (frame.get('fills', [{}])[0].get('color') if frame.get('fills') else None)
 
             if frame_bg:
                 frame_bg = rgb_to_hex(frame_bg['r'], frame_bg['g'], frame_bg['b'])
             else:
                 frame_bg = "No background color specified"
-        
+
             output.append([parsed, [
                 int(frame['absoluteBoundingBox']['width']),
                 int(frame['absoluteBoundingBox']['height']),
@@ -186,5 +200,5 @@ def parse_file(file, token, download_images=True, out=None):
 
     except KeyError as e:
         print(f"KeyError: {str(e)} - likely due to missing keys in JSON response")
-    
+
     return output

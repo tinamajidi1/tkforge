@@ -14,20 +14,25 @@ canvas.create_text(
 )
 '''
 
+def sanitize_variable_name(name):
+    # Replace spaces with underscores and remove invalid characters for Python variable names
+    return ''.join(c if c.isalnum() or c == '_' else '_' for c in name.strip())
+
 def button(i, c):
     return f'''
-button_{c}_image = tk.PhotoImage(file=load_asset("{i['image']}"))
+{sanitize_variable_name(i['full_name'])}_image = tk.PhotoImage(file=load_asset("{i['image']}"))
 
-button_{c} = tk.Button(
-    image=button_{c}_image,
+{sanitize_variable_name(i['full_name'])} = tk.Button(
+    image={sanitize_variable_name(i['full_name'])}_image,
     relief="flat",
     borderwidth=0,
     highlightthickness=0,
-    command=lambda: print("button_{c} has been pressed!")
+    command=lambda: print("{sanitize_variable_name(i['full_name'])} has been pressed!")
 )
 
-button_{c}.place(x={i['x']}, y={i['y']}, width={i['width']}, height={i['height']})
+{sanitize_variable_name(i['full_name'])}.place(x={i['x']}, y={i['y']}, width={i['width']}, height={i['height']})
 '''
+
 
 def image(i, c):
     return f'''
